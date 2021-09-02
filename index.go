@@ -24,6 +24,8 @@ var (
 	}
 
 	queue = make(chan string)
+
+	visit = make(map[string]bool)
 )
 
 func main() {
@@ -40,12 +42,16 @@ func main() {
 	}()
 
 	for href := range queue {
-		crawlURL(href)
+		if !visit[href] {
+			crawlURL(href)
+		}
 	}
 
 }
 
 func crawlURL(href string) {
+
+	visit[href] = true
 
 	fmt.Printf("Crawling the URL %v \n", href)
 
