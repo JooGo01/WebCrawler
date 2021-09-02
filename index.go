@@ -4,34 +4,86 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/steelx/extractlinks"
 )
 
-func main() {
-	URL := "https://www.youtube.com/watch?v=2wmkHFTaXfA&t=767s"
-
-	config := &tls.Config{
+var (
+	config = &tls.Config{
 		InsecureSkipVerify: true,
 	}
 
-	transport := &http.Transport{
+	transport = &http.Transport{
 		TLSClientConfig: config,
 	}
 
-	netClient := &http.Client{
+	netClient = &http.Client{
 		Transport: transport,
 	}
 
-	response, err := netClient.Get(URL)
+	queue = make(chan string)
+)
+
+func main() {
+
+	arguments := os.Args[1:]
+
+	if len(arguments) == 0 {
+		fmt.Println("Missing URL, e.g. go-webscrapper http://js.org/")
+		os.Exit(1)
+	}
+
+	go func() {
+		queue <- arguments[0]
+	}()
+
+	for href := range queue {
+		crawlURL(href)
+	}
+
+}
+
+func crawlURL(href string) {
+
+	fmt.Printf("Crawling the URL %v \n", href)
+
+	response, err := netClient.Get(href)
+
 	checkError(err)
+
 	defer response.Body.Close()
 
 	links, err := extractlinks.All(response.Body)
 
-	fmt.Println(links)
+	checkError(err)
 
+	for _, link := range links {
+		absURL := fixURL(link.Href, href)
+		go func() {
+			queue <- absURL
+		}()
+	}
+
+}
+
+func fixURL(href, URL string) string {
+
+	uri, err := url.Parse(href)
+
+	if err != nil {
+		return ""
+	}
+
+	base, err := url.Parse(URL)
+	if err != nil {
+		return ""
+	}
+
+	uriFix := base.ResolveReference(uri)
+
+	return uriFix.String()
 }
 
 func checkError(err error) {
